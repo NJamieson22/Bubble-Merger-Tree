@@ -1,0 +1,25 @@
+universe = vanilla
+executable = tree.sh
+
+Log    = ./logs/$(Cluster)_$(Process).log
+Output = ./logs/$(Cluster)_$(Process).out
+Error  = ./logs/$(Cluster)_$(Process).err
+
+should_transfer_files = YES
+transfer_input_files = tree
+when_to_transfer_output = ON_EXIT
+# Must specify to transfer entire directories
+transfer_output_files = bubble_tree
+
+request_gpus   = 1
+request_memory = 30 GB
+request_disk = 20 GB
+request_cpus   = 8
+
+queue arguments from (
+    /scratch365/njamieso/astroproj/smooth_renderings bubble_tree 0ckpc
+    /scratch365/njamieso/astroproj/smooth_renderings bubble_tree 1cMpc
+    /scratch365/njamieso/astroproj/smooth_renderings bubble_tree 125ckpc
+    /scratch365/njamieso/astroproj/smooth_renderings bubble_tree 250ckpc
+    /scratch365/njamieso/astroproj/smooth_renderings bubble_tree 500ckpc
+)
