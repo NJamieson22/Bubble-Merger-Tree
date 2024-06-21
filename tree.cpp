@@ -191,7 +191,7 @@ bubble_group get_bubble_groups(float zreion[][N][N]) {
                 vector<int> coords_next = get_surrounding_coordinates(r, true); // get neighboring coordinates
                 for (int l = 0; l < coords_next.size(); l += 3) {
                     // if a neighboring point is greater than, then don't include it in the bubble groups
-                    if (zreion[coords_next[l]][coords_next[l + 1]][coords_next[l + 2]] > value) {
+                    if (zreion[coords_next[l]][coords_next[l + 1]][coords_next[l + 2]] >= value) {
                         is_greater = true;
                         break;
                     }
