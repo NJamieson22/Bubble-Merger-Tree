@@ -480,12 +480,16 @@ void merge_groups(vector<int> groups_to_merge, vector<int> points_to_merge, floa
                     neighbors_values_to_add.push_back(entry.second);
                 }
             }
-
+            if (!bubble_groups.neighboring_coords_and_points[smaller_group].empty() && !bubble_groups.ordered_neighboring_values[smaller_group].empty()) {
+                bubble_groups.neighboring_coords_and_points[smaller_group].clear();
+                bubble_groups.ordered_neighboring_values[smaller_group].clear();
+            }
             for (int j = 0; j < neighbors_coords_to_add.size(); j++) {
                 bubble_groups.neighboring_coords_and_points[larger_group][neighbors_coords_to_add[j]] = neighbors_values_to_add[j];
                 bubble_groups.ordered_neighboring_values[larger_group].insert({ neighbors_values_to_add[j] , neighbors_coords_to_add[j] });
             }
         }
+        
 
         // Remove the merged group from the list of expanding groups, get neighbor of new point, and update expansion_queue.
         // Larger group might merge with smaller group many times, so check if the smaller group hasn't already merged. 
@@ -511,6 +515,12 @@ void merge_groups(vector<int> groups_to_merge, vector<int> points_to_merge, floa
                 if (!bubble_groups.ordered_neighboring_values[larger_group].empty())
                     find_expansion_queue(larger_group, bubble_groups, expansion_queue);
             }
+        }
+        if (bubble_groups.expansion_queue_pointer[smaller_group] != 0.0f) {
+            pair<float, int> current_pair = { bubble_groups.expansion_queue_pointer[smaller_group] ,smaller_group };
+            auto current_expansion = find(expansion_queue.begin(), expansion_queue.end(), current_pair);
+            expansion_queue.erase(current_expansion);
+            bubble_groups.expansion_queue_pointer[smaller_group] = 0.0f;
         }
         /*if (!bubble_groups.ordered_neighboring_values[larger_group].empty()) {
             find_expansion_queue(larger_group, bubble_groups, expansion_queue);
@@ -657,6 +667,10 @@ void expand(float& z, float zreion[][N][N], bubble_group& bubble_groups, data_to
     z = max_z;
     // Loops through the groups to expand and expands/merges accordingly
     for (int i : expanded_groups) {
+        if (bubble_groups.neighboring_coords_and_points[i].empty()) {
+            std::cout << bubble_groups.expansion_queue_pointer[i] << std::endl;
+            std::cout << "airhg bud " << max_z << " " << i << std::endl;
+        }
         bubble_groups.expansion_queue_pointer[i] = 0.0f;
 
         // Get where the expansion point is in the group
@@ -1084,57 +1098,86 @@ void save_the_data(string smooth, string res, float zreion[][N][N], bubble_group
     for (const auto& pair : valueIndexPairs) {
         orderedIndices.push_back(pair.second);
     }
-
+    std::cout << "HERE" << std::endl;
     // Change the ordering of the saved data with the new ordering of bubbles 
-    data_to_save ordered_data_to_save(bubble_groups.total_group_num);
+    vector<int> merged_with_holder;
+    merged_with_holder.resize(saved_data.merged_with.size());
+    vector<float> z_merge_holder;
+    z_merge_holder.resize(saved_data.z_merge.size());
+    vector<float> z_form_holder;
+    z_form_holder.resize(saved_data.z_form.size());
+    vector<int> parent_cells_merged_holder;
+    parent_cells_merged_holder.resize(saved_data.parent_cells_merged.size());
+    vector<int> cells_merged_holder;
+    cells_merged_holder.resize(saved_data.cells_merged.size());
+    vector<int> counts_holder;
+    counts_holder.resize(saved_data.counts.size());
     for (int i = 0; i < orderedIndices.size(); i++) {
-        ordered_data_to_save.merged_with[i] = saved_data.merged_with[orderedIndices[i]];
-        ordered_data_to_save.z_merge[i] = saved_data.z_merge[orderedIndices[i]];
-        ordered_data_to_save.z_form[i] = saved_data.z_form[orderedIndices[i]];
-        ordered_data_to_save.parent_cells_merged[i] = saved_data.parent_cells_merged[orderedIndices[i]];
-        ordered_data_to_save.cells_merged[i] = saved_data.cells_merged[orderedIndices[i]];
-        ordered_data_to_save.counts[i] = saved_data.counts[orderedIndices[i]];
-        ordered_data_to_save.bubble_cells.insert(ordered_data_to_save.bubble_cells.end(), bubble_groups.expansion_points_coords[orderedIndices[i]].begin(), bubble_groups.expansion_points_coords[orderedIndices[i]].end());
+        merged_with_holder[i] = saved_data.merged_with[orderedIndices[i]];
+        z_merge_holder[i] = saved_data.z_merge[orderedIndices[i]];
+        z_form_holder[i] = saved_data.z_form[orderedIndices[i]];
+        parent_cells_merged_holder[i] = saved_data.parent_cells_merged[orderedIndices[i]];
+        cells_merged_holder[i] = saved_data.cells_merged[orderedIndices[i]];
+        counts_holder[i] = saved_data.counts[orderedIndices[i]];
+        saved_data.bubble_cells.insert(saved_data.bubble_cells.end(), bubble_groups.expansion_points_coords[orderedIndices[i]].begin(), bubble_groups.expansion_points_coords[orderedIndices[i]].end());
     }
-    vector<int> cumsum(ordered_data_to_save.counts.size());
-    std::partial_sum(ordered_data_to_save.counts.begin(), ordered_data_to_save.counts.end(), cumsum.begin());
-
+    saved_data.merged_with = merged_with_holder;
+    merged_with_holder.clear();
+    saved_data.z_merge = z_merge_holder;
+    z_merge_holder.clear();
+    saved_data.z_form = z_form_holder;
+    z_form_holder.clear();
+    saved_data.parent_cells_merged = parent_cells_merged_holder;
+    parent_cells_merged_holder.clear();
+    saved_data.cells_merged = cells_merged_holder;
+    cells_merged_holder.clear();
+    saved_data.counts = counts_holder;
+    counts_holder.clear();
+    
+    vector<int> cumsum(saved_data.counts.size());
+    std::partial_sum(saved_data.counts.begin(), saved_data.counts.end(), cumsum.begin());
     int total = 0;
-    vector<int> holder = ordered_data_to_save.merged_with;
+    vector<int> holder = saved_data.merged_with;
     // Change the numbering of the saved data with the new ordering of bubbles
+    vector<int> group_to_index;
+    
+    group_to_index.resize(orderedIndices.size());
+    
     for (int i = 0; i < orderedIndices.size(); i++) {
-        for (int j = 0; j < orderedIndices.size(); j++)
-            if (ordered_data_to_save.merged_with[j] == orderedIndices[i])
-                holder[j] = i;
-        for (int j = 0; j < N; j++)
-            for (int k = 0; k < N; k++)
-                for (int l = 0; l < N; l++)
-                    if (saved_data.cell_to_bubble[j][k][l] == orderedIndices[i])
-                        ordered_data_to_save.cell_to_bubble[j][k][l] = i;
-        ordered_data_to_save.offsets[i] = (cumsum[i] - ordered_data_to_save.counts[i]) * 3;
-        total += ordered_data_to_save.counts[i];
+        group_to_index[orderedIndices[i]] = i;
     }
-    ordered_data_to_save.offsets[bubble_groups.total_group_num] = total;
-    ordered_data_to_save.merged_with = holder;
+
+    for (int i = 0; i < orderedIndices.size(); i++) {
+        if (saved_data.merged_with[i] == -1)
+            continue;
+        saved_data.merged_with[i] = group_to_index[saved_data.merged_with[i]];
+    }
+    for (int j = 0; j < N; j++)
+        for (int k = 0; k < N; k++)
+            for (int l = 0; l < N; l++) {
+                saved_data.cell_to_bubble[j][k][l] = group_to_index[saved_data.cell_to_bubble[j][k][l]];
+            }
+   for (int i = 0; i < orderedIndices.size(); i++) {
+       saved_data.offsets[i] = (cumsum[i] - saved_data.counts[i]) * 3;
+       total += saved_data.counts[i];
+    }
+    saved_data.offsets[bubble_groups.total_group_num] = total;
+    saved_data.merged_with = holder;
+    holder.clear();
 
     // Update the HII_count to be the sum of the previous points
-    ordered_data_to_save.HII_Z_count = saved_data.HII_Z_count;
-    vector<int> cumsum_2(ordered_data_to_save.HII_Z_count.size());
-    std::partial_sum(ordered_data_to_save.HII_Z_count.begin(), ordered_data_to_save.HII_Z_count.end(), cumsum_2.begin());
-    for (int i = 0; i < ordered_data_to_save.HII_Z_count.size(); i++) {
-        ordered_data_to_save.HII_Z_count[i] = N * N * N - cumsum_2[i];
-        std::cout << ordered_data_to_save.HII_Z_count[i] << ' ';
+    vector<int> cumsum_2(saved_data.HII_Z_count.size());
+    std::partial_sum(saved_data.HII_Z_count.begin(), saved_data.HII_Z_count.end(), cumsum_2.begin());
+    for (int i = 0; i < saved_data.HII_Z_count.size(); i++) {
+        saved_data.HII_Z_count[i] = N * N * N - cumsum_2[i];
     }
-    std::cout<<endl;
-    std::cout << ordered_data_to_save.cells_merged[0] << ' ' << total << ' ' << N * N * N << std::endl;
-
+    std::cout << saved_data.cells_merged[0] << ' ' << total << ' ' << N * N * N << std::endl;
     // Calculate the center of mass for r and r^2 for each bubble.
-    get_center_of_mass(bubble_groups, ordered_data_to_save);
-
+    get_center_of_mass(bubble_groups, saved_data);
 
     // Save the data
     string file_name = smooth + "_" + res + "_tree_data.hdf5";
-    write_data(file_name.c_str(), ordered_data_to_save);
+    write_data(file_name.c_str(), saved_data);
 }
 // Print how long each stage took
 void print_time(std::chrono::time_point<std::chrono::high_resolution_clock> start, std::chrono::time_point<std::chrono::high_resolution_clock> end,double entire_run_time) {
