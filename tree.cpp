@@ -1116,7 +1116,6 @@ int main()
 
     // Print out runtime
     auto entire_run_time = std::chrono::duration_cast<std::chrono::microseconds>(saved_data_end - initilization_start).count();
-    //std::chrono::duration<double> entire_run_time = saved_data_end - initilization_start;
     std::cout << "+-------------------------------------------------------+" << std::endl;
     std::cout << "|                Hr:Mi:Sc:uSc    | Fraction Total Time  |" << std::endl;
     std::cout << "| Initialization: ";
