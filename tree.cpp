@@ -121,6 +121,7 @@ struct data_to_save {
     int cell_to_bubble[N][N][N];
     data_to_save(int n) {
         eff_volume.reserve(N3);
+        eff_volume_z.reserve(N3);
         merged_with.resize(n);
         fill(merged_with.begin(), merged_with.end(), -1);
         z_merge.resize(n);
