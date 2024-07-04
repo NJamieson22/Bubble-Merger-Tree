@@ -89,17 +89,17 @@ struct data_to_save {
     // Stores an array of coordinates for each bubble, offsets used to get the coordinates of each bubble.
     // 1D array where each grouping of three is one coordinate. So, index 0, 1, and 2 are all one coordinate
     vector<int> bubble_cells;
-    // Stores the center of mass for each bubble
-    vector<float> r_com;
     // Stores the x,y, and z components of the r_com
     vector<float> dr_com;
-    // Stores the center of mass for r^2 for each bubble
-    vector<float> r2_com;
+    // Stores the intertia tensor of the bubble groups
+    vector<float> I_com;
     // Stores the number of ionized cells for that range of z-values (ranges in HII_Z_Values)
     // Cumsummed at end to get the ionization history
     vector<int> HII_Z_count;
     // Tracks the effective radii of each point when it gets expanded to
     vector<int> eff_volume;
+    // Z that effective volume gets added
+    vector<float> eff_volume_z;
     // The ranges for calculating number of ionized cells
     vector<float> HII_Z_Values{ 17., 16.82608696, 16.65217391, 16.47826087, 16.30434783,
         16.13043478, 15.95652174, 15.7826087, 15.60869565, 15.43478261,
@@ -120,6 +120,7 @@ struct data_to_save {
     // At each coordinate, shows which bubble group into it.
     int cell_to_bubble[N][N][N];
     data_to_save(int n) {
+        eff_volume.reserve(N3);
         merged_with.resize(n);
         fill(merged_with.begin(), merged_with.end(), -1);
         z_merge.resize(n);
@@ -500,8 +501,10 @@ void merge_groups(vector<int> groups_to_merge, vector<int> points_to_merge, floa
             }
 
         }
-        if (!same_point_ahead)
+        if (!same_point_ahead) {
             saved_data.eff_volume.push_back(bubble_groups.size[larger_group]);
+            saved_data.eff_volume_z.push_back(current_z);
+        }
         
 
         // Remove the merged group from the list of expanding groups, get neighbor of new point, and update expansion_queue.
@@ -783,6 +786,7 @@ void expand(float& z, float zreion[][N][N], bubble_group& bubble_groups, data_to
         bubble_groups.expansion_points_coords[group].push_back(coord[2]);
         bubble_groups.size[group] += 1;
         saved_data.eff_volume.push_back(bubble_groups.size[group]);
+        saved_data.eff_volume_z.push_back(max_z);
 
         find_neighbors(coord, group, zreion, bubble_groups, saved_data);
         if (bubble_groups.expansion_queue_pointer[group] == 0.0f) {
@@ -967,9 +971,10 @@ static void write_data(const char* name, data_to_save& saved_data)
     write_1d(file_id, saved_data.offsets.size(), saved_data.offsets.data(), "offsets");
     write_1d(file_id, saved_data.bubble_cells.size(), saved_data.bubble_cells.data(), "bubble_cells");
     write_1d(file_id, saved_data.HII_Z_count.size(), saved_data.HII_Z_count.data(), "x_HI");
-    write_1d(file_id, saved_data.r_com.size(), saved_data.r_com.data(), "r_com");
-    write_1d(file_id, saved_data.r2_com.size(), saved_data.r2_com.data(), "r2_com");
+    write_1d(file_id, saved_data.I_com.size(), saved_data.I_com.data(), "i_com");
+    write_1d(file_id, saved_data.dr_com.size(), saved_data.dr_com.data(), "dr_com");
     write_1d(file_id, saved_data.eff_volume.size(), saved_data.eff_volume.data(), "effective_volume");
+    write_1d(file_id, saved_data.eff_volume_z.size(), saved_data.eff_volume_z.data(), "effective_volume_z");
     write_3d(file_id, N, N, N, saved_data.cell_to_bubble, "cell_to_bubble");
 
     // Close file
@@ -1005,34 +1010,46 @@ void get_center_of_mass(bubble_group& bubble_groups, data_to_save& ordered_data_
         float x=0;
         float y=0;
         float z=0;
-        float r = 0;
-        float r2 = 0;
+        float x2 = 0;
+        float y2 = 0;
+        float z2 = 0;
+        float xy = 0;
+        float xz = 0;
+        float yz = 0;
         Coordinate starting_point;
         starting_point.x = bubble_groups.expansion_points_coords[i][0];
         starting_point.y = bubble_groups.expansion_points_coords[i][1];
         starting_point.z = bubble_groups.expansion_points_coords[i][2];
         for (int j = 3; j < bubble_groups.expansion_points_coords[i].size(); j += 3) {
-            int distance_x = starting_point.x - bubble_groups.expansion_points_coords[i][j];
-            if (distance_x > N / 2) { distance_x = N - distance_x; }
-            int distance_y = starting_point.y - bubble_groups.expansion_points_coords[i][j + 1];
-            if (distance_y > N / 2) { distance_y = N - distance_y; }
-            int distance_z = starting_point.z - bubble_groups.expansion_points_coords[i][j + 2];
-            if (distance_z > N / 2) { distance_z = N - distance_z; }
+            int distance_x = bubble_groups.expansion_points_coords[i][j] - starting_point.x;
+            if (distance_x > N / 2) { distance_x -= N; }
+            if (distance_x < -N / 2) { distance_x += N; }
+            int distance_y = bubble_groups.expansion_points_coords[i][j + 1] - starting_point.y;
+            if (distance_y > N / 2) { distance_y -= N; }
+            if (distance_y < -N / 2) { distance_y += N; }
+            int distance_z = bubble_groups.expansion_points_coords[i][j + 2] - starting_point.z;
+            if (distance_z > N / 2) { distance_z -= N; }
+            if (distance_z < -N / 2) { distance_z += N; }
             x += distance_x;
             y += distance_y;
             z += distance_z;
-            distance_x *= distance_x;
-            distance_y *= distance_y;
-            distance_z *= distance_z;
-            r += sqrtf(distance_x + distance_y + distance_z);
-            r2 += distance_x + distance_y + distance_z;
+            x2 += distance_x * distance_x;
+            y2 += distance_y * distance_y;
+            z2 += distance_z * distance_z;
+            xy += distance_x * distance_y;
+            xz += distance_x * distance_z;
+            yz += distance_y * distance_z;
 
         }
-        ordered_data_to_save.r_com.push_back(r / bubble_groups.expansion_points_coords[i].size() / 3);
-        ordered_data_to_save.dr_com.push_back(x / bubble_groups.expansion_points_coords[i].size() / 3);
-        ordered_data_to_save.dr_com.push_back(y / bubble_groups.expansion_points_coords[i].size() / 3);
-        ordered_data_to_save.dr_com.push_back(z / bubble_groups.expansion_points_coords[i].size() / 3);
-        ordered_data_to_save.r2_com.push_back(r2 / bubble_groups.expansion_points_coords[i].size() / 3);
+        ordered_data_to_save.dr_com.push_back(x);
+        ordered_data_to_save.dr_com.push_back(y);
+        ordered_data_to_save.dr_com.push_back(z);
+        ordered_data_to_save.I_com.push_back(x2);
+        ordered_data_to_save.I_com.push_back(y2);
+        ordered_data_to_save.I_com.push_back(z2);
+        ordered_data_to_save.I_com.push_back(xy);
+        ordered_data_to_save.I_com.push_back(xz);
+        ordered_data_to_save.I_com.push_back(yz);
     }
 }
 // Sorts and saves the data_to_save
@@ -1086,6 +1103,7 @@ void save_the_data(string smooth, string res, float zreion[][N][N], bubble_group
                         bubble_groups.size[num] += 1;
                         saved_data.counts[num] += 1;
                         saved_data.eff_volume.push_back(bubble_groups.size[num]);
+                        saved_data.eff_volume_z.push_back(zreion[i][j][k]);
                         if (zreion[i][j][k] < min)
                             min = zreion[i][j][k];
                         for (int l = 0; l < saved_data.HII_Z_Values.size(); l++)
@@ -1245,6 +1263,7 @@ int main()
         vector<int>r{ bubble_groups.expansion_points_coords[i][0] ,bubble_groups.expansion_points_coords[i][1],bubble_groups.expansion_points_coords[i][2] };
         find_neighbors(r, i, zreion, bubble_groups, saved_data);
         find_expansion_queue(i, bubble_groups, expansion_queue);
+        saved_data.eff_volume_z.push_back(bubble_groups.values[i][0]);
         for (int j = 0; j < saved_data.HII_Z_Values.size(); j++)
             if (bubble_groups.values[i][0] > saved_data.HII_Z_Values[j]) {
                 saved_data.HII_Z_count[j] += 1;
@@ -1261,6 +1280,7 @@ int main()
     while (bubble_groups.non_merged_groups.size() > 1) {
         expand(z, zreion, bubble_groups, saved_data, expansion_queue, epoch);
         //single_expansion(z, zreion, bubble_groups, saved_data, expansion_queue, epoch);
+
         if (epoch % 1000 == 0)
             std::cout << bubble_groups.non_merged_groups.size() << ' ' << z << ' ' << epoch << std::endl;
         epoch += 1;
