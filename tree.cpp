@@ -21,7 +21,7 @@
   status       = H5Awrite(attribute_id, attr_type, &(attr_value));                                  \
   status       = H5Aclose(attribute_id);                                                            \
   status       = H5Sclose(dataspace_id);
-const int N = 128;
+const int N = 32;
 constexpr int N3 = N * N * N;
 
 int thread, n_threads;
@@ -238,10 +238,6 @@ bubble_group get_bubble_groups(float zreion[][N][N]) {
                     if (zreion[coords_next[l]][coords_next[l + 1]][coords_next[l + 2]] >= value) {
                         // If is is equal, check if still local maxima. 
                         if (zreion[coords_next[l]][coords_next[l + 1]][coords_next[l + 2]] == value) {
-                            if (value == 5.4) {
-                                is_greater = true;
-                                break;
-                            }
                             vector<int> points_equal = { i,j,k };
                             vector<int> visited = {};
                             bool keep_going;
@@ -1044,8 +1040,8 @@ void list_datasets(hid_t group_id, const char* group_name) {
     }
 }
 // Get the center of mass for each bubble group
-void get_center_of_mass(bubble_group& bubble_groups, data_to_save& ordered_data_to_save) {
-    for (int i = 0; i < bubble_groups.total_group_num; i++) {
+void get_center_of_mass(bubble_group& bubble_groups, data_to_save& ordered_data_to_save,vector<int> ordered_indices) {
+    for (int i: ordered_indices) {
         float x=0;
         float y=0;
         float z=0;
@@ -1072,12 +1068,12 @@ void get_center_of_mass(bubble_group& bubble_groups, data_to_save& ordered_data_
             x += distance_x;
             y += distance_y;
             z += distance_z;
-            x2 += distance_x * distance_x;
-            y2 += distance_y * distance_y;
-            z2 += distance_z * distance_z;
-            xy += distance_x * distance_y;
-            xz += distance_x * distance_z;
-            yz += distance_y * distance_z;
+            x2 += (distance_x * distance_x);
+            y2 += (distance_y * distance_y);
+            z2 += (distance_z * distance_z);
+            xy += (distance_x * distance_y);
+            xz += (distance_x * distance_z);
+            yz += (distance_y * distance_z);
 
         }
         ordered_data_to_save.dr_com.push_back(x);
@@ -1243,7 +1239,7 @@ void save_the_data(string smooth, string res, float zreion[][N][N], bubble_group
     }
     std::cout << saved_data.cells_merged[0] << ' ' << total << ' ' << N * N * N << ' '<< saved_data.eff_volume.size() << std::endl;
     // Calculate the center of mass for r and r^2 for each bubble.
-    get_center_of_mass(bubble_groups, saved_data);
+    get_center_of_mass(bubble_groups, saved_data,orderedIndices);
 
     // Save the data
     string file_name = smooth + "_" + res + "_tree_data.hdf5";
@@ -1268,13 +1264,14 @@ void print_time(std::chrono::time_point<std::chrono::high_resolution_clock> star
 }
 int main()
 {
+    
     hid_t file_id, dataset;
     herr_t status;
 
     // Open File and z_reion data
     string path;
     string smooth = "1cMpc";
-    string res = "128";
+    string res = "32";
     path = "C:\\Users\\natha\\OneDrive\\Documents\\Thesan\\Thesan-1\\postprocessing\\smooth_renderings\\smooth_renderings_" + smooth + "_" + res + "\\z_reion.hdf5";
     std::cout << path << std::endl;
     file_id = H5Fopen(path.c_str(), H5F_ACC_RDONLY, H5P_DEFAULT);
@@ -1341,7 +1338,7 @@ int main()
     //std::chrono::duration<double> entire_run_time = saved_data_end - initilization_start;
     std::cout << "+-------------------------------------------------------+" << std::endl;
     std::cout << "|                Hr:Mi:Sc:uSc    | Fraction Total Time  |" << std::endl;
-    std::cout << "| Initilization: ";
+    std::cout << "| Initialization: ";
     print_time(initilization_start,initilization_end,entire_run_time);
     std::cout << "| Algorithm:     ";
     print_time(algorithm_start,algorithm_end,entire_run_time);
