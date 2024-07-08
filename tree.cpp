@@ -21,7 +21,7 @@
   status       = H5Awrite(attribute_id, attr_type, &(attr_value));                                  \
   status       = H5Aclose(attribute_id);                                                            \
   status       = H5Sclose(dataspace_id);
-const int N = 32;
+const int N = 128;
 constexpr int N3 = N * N * N;
 
 int thread, n_threads;
@@ -180,6 +180,44 @@ std::vector<int> get_surrounding_coordinates(vector<int> r, bool corners) {
     }
     return coordinate;
 }
+bool check_if_bubble(float zreion[][N][N], vector<int>& points_equal, vector<int>& visited) {
+    Coordinate coord;
+    vector<int> r = { points_equal[0] ,points_equal[1],points_equal[2] };
+    float value = zreion[r[0]][r[1]][r[2]];
+    vector<int> coords_next = get_surrounding_coordinates(r, true);
+    for (int i = 0; i < coords_next.size(); i += 3) {
+        // if a neighboring point is greater than, then don't include it in the bubble groups
+        bool already_counted = false;
+        for (int j = 0; j < visited.size(); j += 3) {
+            if (coords_next[i] == visited[j] && coords_next[i + 1] == visited[j + 1] && coords_next[i + 2] == visited[j + 2]) {
+                already_counted=true;
+                break;
+            }
+        }
+        if (already_counted) { continue; }
+        
+        if (zreion[coords_next[i]][coords_next[i + 1]][coords_next[i + 2]] > value) {
+            return false;
+        }
+        if (zreion[coords_next[i]][coords_next[i + 1]][coords_next[i + 2]] == value) {
+            points_equal.push_back(i);
+            points_equal.push_back(i+1);
+            points_equal.push_back(i+2);
+        }
+    }
+    visited.push_back(r[0]);
+    visited.push_back(r[1]);
+    visited.push_back(r[2]);
+
+    auto first_coord = points_equal.begin();
+    points_equal.erase(first_coord);
+    first_coord = points_equal.begin();
+    points_equal.erase(first_coord);
+    first_coord = points_equal.begin();
+    points_equal.erase(first_coord);
+
+    return true;
+}
 // This function finds and return the starting bubble groups.
 // It does so by finding the coordinates in the dataset that are local maximas,
 // then returns those as the bubble groups
@@ -198,6 +236,40 @@ bubble_group get_bubble_groups(float zreion[][N][N]) {
                 for (int l = 0; l < coords_next.size(); l += 3) {
                     // if a neighboring point is greater than, then don't include it in the bubble groups
                     if (zreion[coords_next[l]][coords_next[l + 1]][coords_next[l + 2]] >= value) {
+                        // If is is equal, check if still local maxima. 
+                        if (zreion[coords_next[l]][coords_next[l + 1]][coords_next[l + 2]] == value) {
+                            if (value == 5.4) {
+                                is_greater = true;
+                                break;
+                            }
+                            vector<int> points_equal = { i,j,k };
+                            vector<int> visited = {};
+                            bool keep_going;
+                            keep_going = check_if_bubble(zreion, points_equal, visited);
+                            while (keep_going && !points_equal.empty()) {
+                                keep_going = check_if_bubble(zreion, points_equal, visited);
+                            }
+
+                            if (keep_going) {
+                                vector<int> new_coords;
+                                vector<float> new_values;
+                                for (int q = 0; q < visited.size(); q += 3) {
+                                    vector<int> curr_coord = { visited[q],visited[q + 1],visited[q + 2] };
+                                    new_coords.insert(new_coords.end(), curr_coord.begin(), curr_coord.end());
+                                    new_values.push_back(value);
+                                }
+                                bubble_groups.expansion_points_coords.push_back(new_coords);
+                                bubble_groups.values.push_back(new_values);
+                                bubble_groups.size.push_back(new_values.size());
+                                bubble_groups.non_merged_groups.push_back(current_group_num);
+                                unordered_map<Coordinate, float, CoordinateHash> pointValueMap;
+                                bubble_groups.neighboring_coords_and_points.push_back(pointValueMap);
+                                multimap<float, Coordinate, DecreasingOrder> orderedValues;
+                                bubble_groups.ordered_neighboring_values.push_back(orderedValues);
+                                bubble_groups.expansion_queue_pointer.push_back(0.0f);
+                                current_group_num += 1;
+                            }
+                        }
                         is_greater = true;
                         break;
                     }
@@ -213,12 +285,9 @@ bubble_group get_bubble_groups(float zreion[][N][N]) {
                 bubble_groups.non_merged_groups.push_back(current_group_num);
                 unordered_map<Coordinate, float, CoordinateHash> pointValueMap;
                 bubble_groups.neighboring_coords_and_points.push_back(pointValueMap);
-                map:multimap<float, Coordinate, DecreasingOrder> orderedValues;
+                multimap<float, Coordinate, DecreasingOrder> orderedValues;
                 bubble_groups.ordered_neighboring_values.push_back(orderedValues);
-
                 bubble_groups.expansion_queue_pointer.push_back(0.0f);
-
-
                 current_group_num += 1;
             }
         }
@@ -475,7 +544,6 @@ void merge_groups(vector<int> groups_to_merge, vector<int> points_to_merge, floa
                 }
             }*/
             
-            // Parallel Slower
             vector<Coordinate> neighbors_coords_to_add;
             vector<float> neighbors_values_to_add;
             for (const auto& entry : bubble_groups.neighboring_coords_and_points[smaller_group]) {
@@ -680,7 +748,6 @@ void expand(float& z, float zreion[][N][N], bubble_group& bubble_groups, data_to
         curr_val = highest_expansion->first;
     }
     expansion_queue.erase(max_z);
-    //expansion_queue.erase(max_z);
     z = max_z;
     // Loops through the groups to expand and expands/merges accordingly
     for (int i : expanded_groups) {
@@ -738,7 +805,6 @@ void expand(float& z, float zreion[][N][N], bubble_group& bubble_groups, data_to
                 merging_coords.push_back(position[j].x);
                 merging_coords.push_back(position[j].y);
                 merging_coords.push_back(position[j].z);
-
             }
         }
     }
@@ -775,7 +841,6 @@ void expand(float& z, float zreion[][N][N], bubble_group& bubble_groups, data_to
     for (int i = 0; i < non_merging_coords.size(); i += 3) {
         vector<int> coord{ non_merging_coords[i],non_merging_coords[i + 1],non_merging_coords[i + 2] };
         int group = non_merging_groups[i / 3];
-        //int num_shows = std::count(non_merging_groups.begin(), non_merging_groups.end(), group);
 
         // Save the necessary saved_data for this group
         saved_data.cell_to_bubble[coord[0]][coord[1]][coord[2]] = group;
@@ -790,6 +855,8 @@ void expand(float& z, float zreion[][N][N], bubble_group& bubble_groups, data_to
         saved_data.eff_volume_z.push_back(max_z);
 
         find_neighbors(coord, group, zreion, bubble_groups, saved_data);
+        // Check if already added a new expansion in the queue. If so, check if new largest is greater than old.
+        // This happens whenever a group has more than one expansion at the same time.
         if (bubble_groups.expansion_queue_pointer[group] == 0.0f) {
             if (!bubble_groups.ordered_neighboring_values[group].empty())
                 find_expansion_queue(group, bubble_groups, expansion_queue);
@@ -805,35 +872,6 @@ void expand(float& z, float zreion[][N][N], bubble_group& bubble_groups, data_to
             }
         }
         
-
-
-        //get neighbors of new point and update the queue.
-        /*if (num_shows > 1) {
-            auto location = find(non_merging_groups.begin(), non_merging_groups.end(), group);
-            if (distance(non_merging_groups.begin(), location) == i / 3) {
-                find_neighbors(coord, group, zreion, bubble_groups, saved_data);
-                if (!bubble_groups.ordered_neighboring_values[group].empty()) {
-                    find_expansion_queue(group, bubble_groups, expansion_queue);
-                }
-            }
-            else {
-                auto previous_addition = bubble_groups.ordered_neighboring_values[group].begin();
-                pair<float, int> h = { previous_addition->first ,group };
-                auto curr_location = find(expansion_queue.begin(), expansion_queue.end(), h);
-                find_neighbors(coord, group, zreion, bubble_groups, saved_data);
-                auto new_location = bubble_groups.ordered_neighboring_values[group].begin();
-                if (curr_location != expansion_queue.end() && (new_location->first > previous_addition->first)) {
-                    expansion_queue.erase(curr_location);
-                    if (!bubble_groups.ordered_neighboring_values[group].empty())
-                        find_expansion_queue(group, bubble_groups, expansion_queue);
-                }
-            }
-        }
-        else {
-            find_neighbors(coord, group, zreion, bubble_groups, saved_data);
-            if (!bubble_groups.ordered_neighboring_values[group].empty())
-                find_expansion_queue(group, bubble_groups, expansion_queue);
-        }*/
     }
     // If we have merges, then merge the groups
     if (merging_groups.size() > 0) {
@@ -1236,7 +1274,7 @@ int main()
     // Open File and z_reion data
     string path;
     string smooth = "1cMpc";
-    string res = "32";
+    string res = "128";
     path = "C:\\Users\\natha\\OneDrive\\Documents\\Thesan\\Thesan-1\\postprocessing\\smooth_renderings\\smooth_renderings_" + smooth + "_" + res + "\\z_reion.hdf5";
     std::cout << path << std::endl;
     file_id = H5Fopen(path.c_str(), H5F_ACC_RDONLY, H5P_DEFAULT);
@@ -1259,17 +1297,21 @@ int main()
     // Update data based on intitial conditions and find starting neighbors and expansion queue
     for (int i : bubble_groups.non_merged_groups) {
         saved_data.z_form[i] = bubble_groups.values[i][0];
-        saved_data.eff_volume.push_back(1);
-        saved_data.cell_to_bubble[bubble_groups.expansion_points_coords[i][0]][bubble_groups.expansion_points_coords[i][1]][bubble_groups.expansion_points_coords[i][2]] = i;
-        vector<int>r{ bubble_groups.expansion_points_coords[i][0] ,bubble_groups.expansion_points_coords[i][1],bubble_groups.expansion_points_coords[i][2] };
-        find_neighbors(r, i, zreion, bubble_groups, saved_data);
-        find_expansion_queue(i, bubble_groups, expansion_queue);
-        saved_data.eff_volume_z.push_back(bubble_groups.values[i][0]);
-        for (int j = 0; j < saved_data.HII_Z_Values.size(); j++)
-            if (bubble_groups.values[i][0] > saved_data.HII_Z_Values[j]) {
-                saved_data.HII_Z_count[j] += 1;
-                break;
-            }
+        saved_data.eff_volume.push_back(bubble_groups.values[i].size());
+        for (int j = 0; j < bubble_groups.expansion_points_coords[i].size(); j += 3) {
+            saved_data.cell_to_bubble[bubble_groups.expansion_points_coords[i][j]][bubble_groups.expansion_points_coords[i][j + 1]][bubble_groups.expansion_points_coords[i][j + 2]] = i;
+            saved_data.eff_volume_z.push_back(bubble_groups.values[i][0]);
+            for (int k = 0; j < saved_data.HII_Z_Values.size(); k++)
+                if (bubble_groups.values[i][0] > saved_data.HII_Z_Values[k]) {
+                    saved_data.HII_Z_count[k] += 1;
+                    break;
+                }
+        }
+        for (int j = 0; j < bubble_groups.expansion_points_coords[i].size(); j += 3) {
+            vector<int>r{ bubble_groups.expansion_points_coords[i][j] ,bubble_groups.expansion_points_coords[i][j+1],bubble_groups.expansion_points_coords[i][j+2] };
+            find_neighbors(r, i, zreion, bubble_groups, saved_data);
+        }
+        find_expansion_queue(i, bubble_groups, expansion_queue); 
     }
     auto initilization_end = std::chrono::high_resolution_clock::now();
 
