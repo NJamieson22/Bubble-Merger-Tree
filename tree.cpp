@@ -21,7 +21,7 @@
   status       = H5Awrite(attribute_id, attr_type, &(attr_value));                                  \
   status       = H5Aclose(attribute_id);                                                            \
   status       = H5Sclose(dataspace_id);
-const int N = 32;
+const int N = 512;
 constexpr int N3 = N * N * N;
 
 int thread, n_threads;
@@ -1039,9 +1039,23 @@ void list_datasets(hid_t group_id, const char* group_name) {
         }
     }
 }
+vector<int> traverse_tree(vector<int> bubbles_merging, int num, bubble_group& bubble_groups, data_to_save& ordered_data_to_save, vector<int> ordered_indices) {
+    vector<int> new_groups;
+    for (int i = 0; i < ordered_data_to_save.merged_with.size(); i++) {
+        if (ordered_data_to_save.merged_with[i] == num) {
+            new_groups.push_back(i);
+        }
+    }
+    if (!new_groups.empty()) {
+        bubbles_merging.insert(bubbles_merging.end(), new_groups.begin(), new_groups.end());
+        for (int i : new_groups)
+            bubbles_merging = traverse_tree(bubbles_merging, i, bubble_groups, ordered_data_to_save, ordered_indices);
+    }
+    return bubbles_merging;
+}
 // Get the center of mass for each bubble group
 void get_center_of_mass(bubble_group& bubble_groups, data_to_save& ordered_data_to_save,vector<int> ordered_indices) {
-    for (int i: ordered_indices) {
+    for (int i = 0;i< ordered_indices.size();i++) {
         float x=0;
         float y=0;
         float z=0;
@@ -1052,29 +1066,39 @@ void get_center_of_mass(bubble_group& bubble_groups, data_to_save& ordered_data_
         float xz = 0;
         float yz = 0;
         Coordinate starting_point;
-        starting_point.x = bubble_groups.expansion_points_coords[i][0];
-        starting_point.y = bubble_groups.expansion_points_coords[i][1];
-        starting_point.z = bubble_groups.expansion_points_coords[i][2];
-        for (int j = 3; j < bubble_groups.expansion_points_coords[i].size(); j += 3) {
-            int distance_x = bubble_groups.expansion_points_coords[i][j] - starting_point.x;
-            if (distance_x > N / 2) { distance_x -= N; }
-            if (distance_x < -N / 2) { distance_x += N; }
-            int distance_y = bubble_groups.expansion_points_coords[i][j + 1] - starting_point.y;
-            if (distance_y > N / 2) { distance_y -= N; }
-            if (distance_y < -N / 2) { distance_y += N; }
-            int distance_z = bubble_groups.expansion_points_coords[i][j + 2] - starting_point.z;
-            if (distance_z > N / 2) { distance_z -= N; }
-            if (distance_z < -N / 2) { distance_z += N; }
-            x += distance_x;
-            y += distance_y;
-            z += distance_z;
-            x2 += (distance_x * distance_x);
-            y2 += (distance_y * distance_y);
-            z2 += (distance_z * distance_z);
-            xy += (distance_x * distance_y);
-            xz += (distance_x * distance_z);
-            yz += (distance_y * distance_z);
+        starting_point.x = bubble_groups.expansion_points_coords[ordered_indices[i]][0];
+        starting_point.y = bubble_groups.expansion_points_coords[ordered_indices[i]][1];
+        starting_point.z = bubble_groups.expansion_points_coords[ordered_indices[i]][2];
 
+        vector<int> merged_groups;
+        merged_groups = traverse_tree(merged_groups, i, bubble_groups, ordered_data_to_save, ordered_indices);
+        merged_groups.push_back(i);
+        for (int k : merged_groups) {
+            int val = 0;
+            if (k == i) {
+                val = 3;
+            }
+            for (int j = val; j < bubble_groups.expansion_points_coords[ordered_indices[k]].size(); j += 3) {
+                int distance_x = bubble_groups.expansion_points_coords[ordered_indices[k]][j] - starting_point.x;
+                if (distance_x > N / 2) { distance_x -= N; }
+                if (distance_x < -N / 2) { distance_x += N; }
+                int distance_y = bubble_groups.expansion_points_coords[ordered_indices[k]][j + 1] - starting_point.y;
+                if (distance_y > N / 2) { distance_y -= N; }
+                if (distance_y < -N / 2) { distance_y += N; }
+                int distance_z = bubble_groups.expansion_points_coords[ordered_indices[k]][j + 2] - starting_point.z;
+                if (distance_z > N / 2) { distance_z -= N; }
+                if (distance_z < -N / 2) { distance_z += N; }
+                x += distance_x;
+                y += distance_y;
+                z += distance_z;
+                x2 += (distance_x * distance_x);
+                y2 += (distance_y * distance_y);
+                z2 += (distance_z * distance_z);
+                xy += (distance_x * distance_y);
+                xz += (distance_x * distance_z);
+                yz += (distance_y * distance_z);
+
+            }
         }
         ordered_data_to_save.dr_com.push_back(x);
         ordered_data_to_save.dr_com.push_back(y);
@@ -1270,8 +1294,8 @@ int main()
 
     // Open File and z_reion data
     string path;
-    string smooth = "1cMpc";
-    string res = "32";
+    string smooth = "0ckpc";
+    string res = "512";
     path = "C:\\Users\\natha\\OneDrive\\Documents\\Thesan\\Thesan-1\\postprocessing\\smooth_renderings\\smooth_renderings_" + smooth + "_" + res + "\\z_reion.hdf5";
     std::cout << path << std::endl;
     file_id = H5Fopen(path.c_str(), H5F_ACC_RDONLY, H5P_DEFAULT);
@@ -1338,7 +1362,7 @@ int main()
     //std::chrono::duration<double> entire_run_time = saved_data_end - initilization_start;
     std::cout << "+-------------------------------------------------------+" << std::endl;
     std::cout << "|                Hr:Mi:Sc:uSc    | Fraction Total Time  |" << std::endl;
-    std::cout << "| Initialization: ";
+    std::cout << "| Initilization: ";
     print_time(initilization_start,initilization_end,entire_run_time);
     std::cout << "| Algorithm:     ";
     print_time(algorithm_start,algorithm_end,entire_run_time);
