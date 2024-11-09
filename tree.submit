@@ -13,13 +13,13 @@ transfer_output_files = bubble_tree
 
 request_gpus   = 1
 request_memory = 30 GB
-request_disk = 20 GB
-request_cpus   = 8
+request_disk = 5 GB
+request_cpus   = 4
 
 queue arguments from (
-    /scratch365/njamieso/astroproj/smooth_renderings bubble_tree 0ckpc
-    /scratch365/njamieso/astroproj/smooth_renderings bubble_tree 1cMpc
-    /scratch365/njamieso/astroproj/smooth_renderings bubble_tree 125ckpc
-    /scratch365/njamieso/astroproj/smooth_renderings bubble_tree 250ckpc
-    /scratch365/njamieso/astroproj/smooth_renderings bubble_tree 500ckpc
+    /scratch365/njamieso/astroproj/smooth_renderings 0ckpc 512
+    /scratch365/njamieso/astroproj/smooth_renderings 1cMpc 512
+    /scratch365/njamieso/astroproj/smooth_renderings 125ckpc 512
+    /scratch365/njamieso/astroproj/smooth_renderings 250ckpc 512
+    /scratch365/njamieso/astroproj/smooth_renderings 500ckpc 512
 )
