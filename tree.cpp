@@ -1003,7 +1003,7 @@ void save_the_data(string smooth, string res, float zreion[][N][N], bubble_group
     get_center_of_mass(bubble_groups, saved_data,orderedIndices);
 
     // Save the data
-    string file_name = smooth + "_" + res + "_tree_data.hdf5";
+    string file_name = "bubble_tree/"+ smooth + "_" + res + "_tree_data.hdf5";
     write_data(file_name.c_str(), saved_data);
 }
 // Print how long each stage took
@@ -1023,7 +1023,7 @@ void print_time(std::chrono::time_point<std::chrono::high_resolution_clock> star
               << std::setw(2) << std::setfill('0') << seconds << ":"
               << std::setw(6) << std::setfill('0') << microseconds << " |       " << std::setprecision(5) << std::round(faction_time * scale) / scale << "        |" << std::endl;
 }
-int main()
+int main(int argc, char* argv[])
 {
     
     hid_t file_id, dataset;
@@ -1031,8 +1031,8 @@ int main()
 
     // Open File and z_reion data
     string path;
-    string smooth = "0ckpc";
-    string res = "512";
+    string smooth = argv[1];
+    string res = argv[2];
     path = "C:\\Users\\natha\\OneDrive\\Documents\\Thesan\\Thesan-1\\postprocessing\\smooth_renderings\\smooth_renderings_" + smooth + "_" + res + "\\z_reion.hdf5";
     std::cout << path << std::endl;
     file_id = H5Fopen(path.c_str(), H5F_ACC_RDONLY, H5P_DEFAULT);
