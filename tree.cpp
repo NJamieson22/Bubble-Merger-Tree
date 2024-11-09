@@ -142,14 +142,14 @@ struct data_to_save {
 
 // This function takes in a 3D point r, and finds all of the adjacent coordinates. 
 // If corners is true, then it also computes the adjacent corners.
-// the 3D space is closed, so, for a sized N space, at the coordinate value N, it goes to the 0 index.
+//The 3D space is closed, so for a sized N space, at the coordinate value N, it goes to the 0 index.
 std::vector<int> get_surrounding_coordinates(vector<int> r, bool corners) {
     vector<int> coordinate;
     coordinate.reserve(3 * 26);
     int x_increase;
     int y_increase;
     int z_increase;
-    // Get all surronding points including corners, skipping self.
+    // Get all surrounding points, including corners, and skipping self.
     if (corners) {
         for (int dx = -1; dx < 2; dx++) {
             for (int dy = -1; dy < 2; dy++) {
@@ -218,15 +218,15 @@ bool check_if_bubble(float zreion[][N][N], vector<int>& points_equal, vector<int
 
     return true;
 }
-// This function finds and return the starting bubble groups.
-// It does so by finding the coordinates in the dataset that are local maximas,
+// This function finds and returns the starting bubble groups.
+// It does so by finding the coordinates in the dataset that are local maxima,
 // then returns those as the bubble groups
 bubble_group get_bubble_groups(float zreion[][N][N]) {
     bubble_group bubble_groups;
     int current_group_num = 0;
     bool is_greater = false;
 
-    // Loop through entire dataset to check maximas
+    // Loop through entire dataset to check maxima
     for (int i = 0; i < N; i++) {
         for (int j = 0; j < N; j++) {
             for (int k = 0; k < N; k++) {
@@ -296,13 +296,13 @@ void find_neighbors(vector<int> r, int group, float zreion[][N][N], bubble_group
     vector<int> coords = get_surrounding_coordinates(r, true);
     vector<Coordinate> new_points;
 
-    // Check surronding coordinates to see if they are already accounted for
-    for (int i = 0; i < coords.size(); i += 3) { //Hash table Unorderd set
+    // Check surrounding coordinates to see if they are already accounted for
+    for (int i = 0; i < coords.size(); i += 3) { //Hash table Unordered set
         Coordinate point = { coords[i] ,coords[i + 1],coords[i + 2] };
 
         // Check neighbors if it is not already a point in the bubble_group
         if (saved_data.cell_to_bubble[coords[i]][coords[i + 1]][coords[i + 2]] == -1) {
-            // Check the unordered map to see if it there already
+            // Check the unordered map to see if it is already there
             bool is_not_in = bubble_groups.neighboring_coords_and_points[group].find(point) == bubble_groups.neighboring_coords_and_points[group].end();
             if (is_not_in) {
                 bubble_groups.neighboring_coords_and_points[group][point] = zreion[coords[i]][coords[i + 1]][coords[i + 2]];
@@ -311,146 +311,15 @@ void find_neighbors(vector<int> r, int group, float zreion[][N][N], bubble_group
         }
     }
 }
-// This function preforms binary search on the expansion queue to slot in the new largest neighboring value for that group.
-void binary_search(int group, float value, vector<pair<float, int>>& expansion_queue) {
-    // Get the starting points
-    int size = expansion_queue.size();
-    int low = 0;
-    // It will always find a spot, so while (true) is fine.
-    while (true) {
-        int mid = low + (size - low) / 2;
-        // Check the different conditions for how to iterate/insert the piece
-        if (mid == 0) {
-            auto it = expansion_queue.begin();
-            // If the first value is more than the value inserting, want to put our value after the first element
-            if (expansion_queue[0].first > value)
-                ++it;
-            pair<float, int> h{ value,group };
-            expansion_queue.insert(it, h);
-            break;
-        }
-        else if (mid == expansion_queue.size() - 1) {
-            auto it = expansion_queue.begin() + mid;
-            // If the last value is smaller than the first value, we want to insert it before.
-            if (expansion_queue[0].first < value)
-                --it;
-            pair<float, int> h{ value,group };
-            expansion_queue.push_back(h);
-            break;
-        }
-        else if (expansion_queue[mid - 1].first > value && expansion_queue[mid + 1].first > value) {
-            low = mid + 1;
-        }
-        else if (expansion_queue[mid - 1].first < value && expansion_queue[mid + 1].first < value) {
-            size = mid - 1;
-        }
-        else {
-            auto it = expansion_queue.begin() + mid;
-            if (expansion_queue[mid].first > value)
-                ++it;
-            pair<float, int> h{ value,group };
-            expansion_queue.insert(it, h);
-            break;
-        }
-    }
 
-}
 // Get the expansion queue for a certain group
 void find_expansion_queue(int group, bubble_group& bubble_groups, multimap<float, int, DecreasingOrder>& expansion_queue) {
-    // Since ordered_neighboring_values os a map decreasing in value, just get the first element
+    // Since ordered_neighboring_values is a map decreasing in value, just get the first element
     auto it = bubble_groups.ordered_neighboring_values[group].begin();
     expansion_queue.emplace(it->first, group);
     bubble_groups.expansion_queue_pointer[group] = it->first;
-    //expansion_queue[group] = it->first;
 }
-// Merges all groups that need to be merged. Used for the single-point expansion.
-void merge_groups_single(vector<int> groups_to_merge, Coordinate point_to_merge, float current_z, float zreion[][N][N], bubble_group& bubble_groups, data_to_save& saved_data, multimap<float, int, DecreasingOrder>& expansion_queue, int epoch) {
-    vector<std::pair<int, int>> group_sizes;
-    group_sizes.reserve(groups_to_merge.size());
-    for (int i : groups_to_merge) {
-        group_sizes.emplace_back(bubble_groups.size[i], i);
-    }
 
-    sort(group_sizes.begin(), group_sizes.end(), std::greater<>());
-
-    vector<int> ordered_groups;
-    ordered_groups.reserve(groups_to_merge.size());
-    for (const auto& pair : group_sizes) {
-        ordered_groups.push_back(pair.second);
-    }
-    int larger_group = ordered_groups[0];
-    bubble_groups.neighboring_coords_and_points[larger_group].erase(point_to_merge);
-    auto it = bubble_groups.ordered_neighboring_values[larger_group].begin();
-    while (it->first == current_z) {
-        Coordinate check_point = it->second;
-        if (check_point.x == point_to_merge.x && check_point.y == point_to_merge.y && check_point.z == point_to_merge.z)
-            break;
-        ++it;
-        if (it == bubble_groups.ordered_neighboring_values[larger_group].end()) {
-            break;
-        }
-    }
-    bubble_groups.ordered_neighboring_values[larger_group].erase(it);
-    saved_data.cell_to_bubble[point_to_merge.x][point_to_merge.y][point_to_merge.z] = larger_group;
-
-    // Save the necessary saved_data for this group
-    saved_data.counts[larger_group] += 1;
-
-    // Update the group for this new coordinate
-
-    bubble_groups.size[larger_group] += 1;
-
-    for (int i = 1; i < ordered_groups.size(); i++) {
-        int smaller_group = ordered_groups[i];
-        if (smaller_group == larger_group)
-            continue;
-        bubble_groups.neighboring_coords_and_points[smaller_group].erase(point_to_merge);
-        it = bubble_groups.ordered_neighboring_values[smaller_group].begin();
-        while (it->first == current_z) {
-            Coordinate check_point = it->second;
-            if (check_point.x == point_to_merge.x && check_point.y == point_to_merge.y && check_point.z == point_to_merge.z)
-                break;
-            ++it;
-            if (it == bubble_groups.ordered_neighboring_values[smaller_group].end()) {
-                break;
-            }
-        }
-        bubble_groups.ordered_neighboring_values[smaller_group].erase(it);
-
-        // Update the necessary saved_data characteristics
-        saved_data.merged_with[smaller_group] = larger_group;
-        saved_data.z_merge[smaller_group] = current_z;
-        saved_data.cells_merged[smaller_group] = bubble_groups.size[smaller_group];
-        saved_data.parent_cells_merged[smaller_group] = bubble_groups.size[larger_group];
-
-        bubble_groups.size[larger_group] += bubble_groups.size[smaller_group];
-
-        // Put in the neighboring points. There is possibility for duplicate point, so need to check for those points before adding them in.
-        vector<Coordinate> neighbors_coords_to_add;
-        vector<float> neighbors_values_to_add;
-        for (const auto& entry : bubble_groups.neighboring_coords_and_points[smaller_group]) {
-            if (bubble_groups.neighboring_coords_and_points[larger_group].find(entry.first) == bubble_groups.neighboring_coords_and_points[larger_group].end()) {
-                neighbors_coords_to_add.push_back(entry.first);
-                neighbors_values_to_add.push_back(entry.second);
-            }
-        }
-        for (int j = 0; j < neighbors_coords_to_add.size(); j++) {
-            bubble_groups.neighboring_coords_and_points[larger_group][neighbors_coords_to_add[j]] = neighbors_values_to_add[j];
-            bubble_groups.ordered_neighboring_values[larger_group].insert({ neighbors_values_to_add[j] , neighbors_coords_to_add[j] });
-        }
-
-        // Remove merged group
-        auto group_to_remove = find(bubble_groups.non_merged_groups.begin(), bubble_groups.non_merged_groups.end(), smaller_group);
-        if (group_to_remove != bubble_groups.non_merged_groups.end()) {
-            bubble_groups.non_merged_groups.erase(group_to_remove);
-        }
-    }
-    vector<int> r{ point_to_merge.x,point_to_merge.y,point_to_merge.z };
-    find_neighbors(r, larger_group, zreion, bubble_groups, saved_data);
-    //if (!bubble_groups.ordered_neighboring_values[larger_group].empty()) {
-        //find_expansion_queue(larger_group, bubble_groups, expansion_queue);
-    //}
-}
 // Merges all groups that need to be merged
 void merge_groups(vector<int> groups_to_merge, vector<int> points_to_merge, float current_z, float zreion[][N][N], bubble_group& bubble_groups, data_to_save& saved_data, multimap<float, int, DecreasingOrder>& expansion_queue, int epoch) {
     // If the same group merges several times, this gives us how many times it merged so that we can check
@@ -502,7 +371,7 @@ void merge_groups(vector<int> groups_to_merge, vector<int> points_to_merge, floa
             }
 
         }
-        // Update data if it hasn't been added yet.
+        // Update data if it still needs to be added.
         if (not_in) {
             for (int j = coord_pos; j < coord_pos + 3; j++)
                 bubble_groups.expansion_points_coords[larger_group].push_back(points_to_merge[j]);
@@ -512,33 +381,11 @@ void merge_groups(vector<int> groups_to_merge, vector<int> points_to_merge, floa
         }
 
         // Merge the groups, increasing the size accordingly and combining the coords.
-        // Need to check if the smaller group hasn't already merged, because it is possible to merge with
+        // Need to check if the smaller group hasn't already merged because it is possible to merge with
         // the large group many times.
         auto group_to_remove = find(bubble_groups.non_merged_groups.begin(), bubble_groups.non_merged_groups.end(), smaller_group);
         if (group_to_remove != bubble_groups.non_merged_groups.end()) {
             bubble_groups.size[larger_group] += bubble_groups.size[smaller_group];
-
-            // Put in the neighboring points. There is possibility for duplicate point, so need to check for those points before adding them in.
-            /*#pragma omp parallel
-            {
-                vector<Coordinate> neighbors_coords_to_add;
-                vector<float> neighbors_values_to_add;
-                #pragma omp for schedule(static)
-                for (int bucket = 0; bucket < static_cast<int>(bubble_groups.neighboring_coords_and_points[smaller_group].bucket_count()); ++bucket)
-                    for (auto pair = bubble_groups.neighboring_coords_and_points[smaller_group].begin(bucket); pair != bubble_groups.neighboring_coords_and_points[smaller_group].end(bucket); pair++) {
-                        if (bubble_groups.neighboring_coords_and_points[larger_group].find(pair->first) == bubble_groups.neighboring_coords_and_points[larger_group].end()) {
-                            neighbors_coords_to_add.push_back(pair->first);
-                            neighbors_values_to_add.push_back(pair->second);
-                        }
-
-                    }
-                // Add in unique points
-                #pragma omp critical
-                for (int j = 0; j < neighbors_coords_to_add.size(); j++) {
-                    bubble_groups.neighboring_coords_and_points[larger_group][neighbors_coords_to_add[j]] = neighbors_values_to_add[j];
-                    bubble_groups.ordered_neighboring_values[larger_group].insert({ neighbors_values_to_add[j] , neighbors_coords_to_add[j] });
-                }
-            }*/
             
             vector<Coordinate> neighbors_coords_to_add;
             vector<float> neighbors_values_to_add;
@@ -572,13 +419,13 @@ void merge_groups(vector<int> groups_to_merge, vector<int> points_to_merge, floa
         }
         
 
-        // Remove the merged group from the list of expanding groups, get neighbor of new point, and update expansion_queue.
-        // Larger group might merge with smaller group many times, so check if the smaller group hasn't already merged. 
+        // Remove the merged group from the list of expanding groups, get the neighbor of the new point, and update expansion_queue.
+        // A larger group might merge with the smaller group many times, so check if the smaller group hasn't already merged. 
         if (group_to_remove != bubble_groups.non_merged_groups.end()) {
             bubble_groups.non_merged_groups.erase(group_to_remove);
         }
 
-        // Only need to check neighbor for the new coordinate once.
+        // Only need to check the neighbor for the new coordinate once.
         if (not_in) {
             vector<int> r{ points_to_merge[coord_pos],points_to_merge[coord_pos + 1],points_to_merge[coord_pos + 2] };
             find_neighbors(r, larger_group, zreion, bubble_groups, saved_data);
@@ -603,9 +450,6 @@ void merge_groups(vector<int> groups_to_merge, vector<int> points_to_merge, floa
             expansion_queue.erase(current_expansion);
             bubble_groups.expansion_queue_pointer[smaller_group] = 0.0f;
         }
-        /*if (!bubble_groups.ordered_neighboring_values[larger_group].empty()) {
-            find_expansion_queue(larger_group, bubble_groups, expansion_queue);
-        }*/
     }
 }
 // Given a merging list, update it so we do not get any error. 
@@ -633,7 +477,7 @@ void update_merge_list(vector<int>& groups_to_merge, bubble_group& bubble_groups
             if (groups_to_merge[j] == larger_group || groups_to_merge[j + 1] == larger_group) {
                 continue;
             }
-            // if either pair equals the smaller group, replace with the larger group.
+            //If either pair equals the smaller group, replace it with the larger group.
             if (groups_to_merge[j] == smaller_group) {
                 groups_to_merge[j] = larger_group;
             }
@@ -644,77 +488,8 @@ void update_merge_list(vector<int>& groups_to_merge, bubble_group& bubble_groups
         }
     }
 }
-// Expands the bubble_groups for the single-point expansion algorithm
-void single_expansion(float& z, float zreion[][N][N], bubble_group& bubble_groups, data_to_save& saved_data, multimap<float, int, DecreasingOrder>& expansion_queue, int epoch) {
-    int group_to_expand;
-    float max_z = 0;
-    vector<int> merging_groups = {};
-    vector<int> expanded_groups = {};
-    auto to_expand = expansion_queue.begin();
-    max_z = to_expand->first;
-    group_to_expand = to_expand->second;
-    expansion_queue.erase(to_expand);
-    z = max_z;
-    auto it = bubble_groups.ordered_neighboring_values[group_to_expand].begin();
-    Coordinate pos = it->second;
-    vector<int> coord = { pos.x,pos.y,pos.z };
-    vector<int> surronding_coords;
-    surronding_coords = get_surrounding_coordinates(coord, true);
 
-    for (int i = 0; i < surronding_coords.size(); i += 3) {
-        if (saved_data.cell_to_bubble[surronding_coords[i]][surronding_coords[i + 1]][surronding_coords[i + 2]] != -1 && saved_data.cell_to_bubble[surronding_coords[i]][surronding_coords[i + 1]][surronding_coords[i + 2]] != group_to_expand) {
-            bool already_there = false;
-            int parent = saved_data.cell_to_bubble[surronding_coords[i]][surronding_coords[i + 1]][surronding_coords[i + 2]];
-            auto group_to_remove = find(bubble_groups.non_merged_groups.begin(), bubble_groups.non_merged_groups.end(), parent);
-            while (group_to_remove == bubble_groups.non_merged_groups.end()) {
-                parent = saved_data.merged_with[parent];
-            }
-            if (parent == group_to_expand)
-                continue;
-            for (int j : merging_groups) {
-                if (parent == j) {
-                    already_there = true;
-                    break;
-                }
-            }
-            if (already_there) {
-                continue;
-            }
-
-            merging_groups.push_back(parent);
-        }
-    }
-    while (max_z <= saved_data.HII_Z_Values[saved_data.HII_index])
-        saved_data.HII_index += 1;
-    saved_data.HII_Z_count[saved_data.HII_index] += 1;
-
-    if (merging_groups.size() > 0) {
-        merging_groups.push_back(group_to_expand);
-        merge_groups_single(merging_groups, pos, max_z, zreion, bubble_groups, saved_data, expansion_queue, epoch);
-    }
-    else {
-        bubble_groups.neighboring_coords_and_points[group_to_expand].erase(pos);
-        bubble_groups.ordered_neighboring_values[group_to_expand].erase(it);
-        saved_data.cell_to_bubble[coord[0]][coord[1]][coord[2]] = group_to_expand;
-
-        // Save the necessary saved_data for this group
-        saved_data.counts[group_to_expand] += 1;
-
-        // Update the group for this new coordinate
-
-        bubble_groups.expansion_points_coords[group_to_expand].push_back(coord[0]);
-        bubble_groups.expansion_points_coords[group_to_expand].push_back(coord[1]);
-        bubble_groups.expansion_points_coords[group_to_expand].push_back(coord[2]);
-        bubble_groups.size[group_to_expand] += 1;
-
-        //get neighbors of new point and update the queue.
-        find_neighbors(coord, group_to_expand, zreion, bubble_groups, saved_data);
-        if (!bubble_groups.ordered_neighboring_values[group_to_expand].empty()) {
-            find_expansion_queue(group_to_expand, bubble_groups, expansion_queue);
-        }
-    }
-}
-// Expands the bubble_groups for the biggest neighbor. If groups expands into the same space, it merges them.
+// Expands the bubble_groups for the biggest neighbor. If groups expand into the same space, it merges them.
 void expand(float& z, float zreion[][N][N], bubble_group& bubble_groups, data_to_save& saved_data, multimap<float, int, DecreasingOrder>& expansion_queue, int epoch) {
     float max_z = 0;
 
@@ -723,16 +498,8 @@ void expand(float& z, float zreion[][N][N], bubble_group& bubble_groups, data_to
     vector<int> non_merging_groups = {};
     vector<int> merging_groups = {};
     vector<int> merging_coords = {};
-    /*for (int i = 0; i < bubble_groups.total_group_num; i++) {
-        if (expansion_queue[i] > max_z) {
-            max_z = expansion_queue[i];
-            expanded_groups = { i };
-        }
-        else if (expansion_queue[i] == max_z)
-            expanded_groups.push_back(i);
-    }*/
 
-    // Gets the biggest neighbor from the expansion_queue and the groups corresponding with it.
+    // Gets the biggest neighbor from the expansion_queue and the corresponding groups.
     auto highest_expansion = expansion_queue.begin();
     max_z = highest_expansion->first;
     float curr_val = highest_expansion->first;
@@ -869,7 +636,7 @@ void expand(float& z, float zreion[][N][N], bubble_group& bubble_groups, data_to
         }
         
     }
-    // If we have merges, then merge the groups
+    // If we have merged, then merge the groups
     if (merging_groups.size() > 0) {
         update_merge_list(merging_groups, bubble_groups);
         merge_groups(merging_groups, merging_coords, max_z, zreion, bubble_groups, saved_data, expansion_queue, epoch);
@@ -985,7 +752,7 @@ static void write_3d(hid_t file_id, hsize_t n_x, hsize_t n_y, hsize_t n_z, int d
     H5Sclose(filespace);
     H5Dclose(dataset);
 }
-// Actually writes the data to the hdf5 file
+// Writes the data to the hdf5 file
 static void write_data(const char* name, data_to_save& saved_data)
 {
     // Identifiers
@@ -1048,7 +815,7 @@ vector<int> traverse_tree(vector<int> bubbles_merging, int num, bubble_group& bu
     }
     if (!new_groups.empty()) {
         bubbles_merging.insert(bubbles_merging.end(), new_groups.begin(), new_groups.end());
-        for (int i : new_groups)
+        for (int i: new_groups)
             bubbles_merging = traverse_tree(bubbles_merging, i, bubble_groups, ordered_data_to_save, ordered_indices);
     }
     return bubbles_merging;
@@ -1118,39 +885,9 @@ void save_the_data(string smooth, string res, float zreion[][N][N], bubble_group
     saved_data.cells_merged[num] = N * N * N;
     saved_data.parent_cells_merged[num] = N * N * N;
 
-    // Loop through the points that did not yet get expanded to (as code ended whenever there was only)
-    // One bubble left. Thus, added this points to that last bubble and update the corresponding data
+    // Loop through the points that did not yet get expanded to (as code ended whenever there was only one)
+    // One bubble left. Thus, added these points to that last bubble and updated the corresponding data
     float min = 1000;
-    /*#pragma omp parallel 
-    {
-        vector<int> new_points = {};
-        float local_min = 1000;
-        int* cell_to_bubble_ptr = &saved_data.cell_to_bubble[0][0][0];
-        #pragma omp parallel for schedule(static)
-        for (int index = 0; index < N3; index++) {
-            if (cell_to_bubble_ptr[index] == -1) {
-                cell_to_bubble_ptr[index] = num;
-                int i = index / (N * N);
-                int j = (index / N) % N;
-                int k = index % N;
-                new_points.push_back(i);
-                new_points.push_back(j);
-                new_points.push_back(k);
-                saved_data.counts[num] += 1;
-                if (zreion[i][j][k] < local_min)
-                    local_min = zreion[i][j][k];
-                for (int l = 0; l < saved_data.HII_Z_Values.size(); l++)
-                    if (zreion[i][j][k] > saved_data.HII_Z_Values[l]) {
-                        saved_data.HII_Z_count[l] += 1;
-                        break;
-                    }
-            }
-        }
-        #pragma omp critical 
-        bubble_groups.expansion_points_coords[num].insert(bubble_groups.expansion_points_coords[num].end(), new_points.begin(), new_points.end());
-        if (local_min < min)
-            min = local_min;
-    }*/
         for (int i = 0; i < N; i++)
             for (int j = 0; j < N; j++)
                 for (int k = 0; k < N; k++) {
@@ -1175,7 +912,7 @@ void save_the_data(string smooth, string res, float zreion[][N][N], bubble_group
 
     saved_data.z_merge[num] = min;
 
-    // Order the data based on how big the bubble were.
+    // Order the data based on how big the bubbles were.
     // The largest one goes to index 0, then index 1, ...
     std::vector<std::pair<int, int>> valueIndexPairs;
     for (int i = 0; i < saved_data.cells_merged.size(); ++i) {
@@ -1312,10 +1049,9 @@ int main()
     auto initilization_start = std::chrono::high_resolution_clock::now();
     bubble_group bubble_groups = get_bubble_groups(zreion);
     data_to_save saved_data(bubble_groups.total_group_num);
-    //vector<float> expansion_queue(bubble_groups.total_group_num);
     multimap<float, int, DecreasingOrder> expansion_queue;
 
-    // Update data based on intitial conditions and find starting neighbors and expansion queue
+    // Update data based on initial conditions and find starting neighbors and expansion queue
     for (int i : bubble_groups.non_merged_groups) {
         saved_data.z_form[i] = bubble_groups.values[i][0];
         saved_data.eff_volume.push_back(bubble_groups.values[i].size());
@@ -1343,7 +1079,6 @@ int main()
     // Keep expanding until only one group left
     while (bubble_groups.non_merged_groups.size() > 1) {
         expand(z, zreion, bubble_groups, saved_data, expansion_queue, epoch);
-        //single_expansion(z, zreion, bubble_groups, saved_data, expansion_queue, epoch);
 
         if (epoch % 1000 == 0)
             std::cout << bubble_groups.non_merged_groups.size() << ' ' << z << ' ' << epoch << std::endl;
@@ -1359,10 +1094,9 @@ int main()
 
     // Print out runtime
     auto entire_run_time = std::chrono::duration_cast<std::chrono::microseconds>(saved_data_end - initilization_start).count();
-    //std::chrono::duration<double> entire_run_time = saved_data_end - initilization_start;
     std::cout << "+-------------------------------------------------------+" << std::endl;
     std::cout << "|                Hr:Mi:Sc:uSc    | Fraction Total Time  |" << std::endl;
-    std::cout << "| Initilization: ";
+    std::cout << "| Initialization: ";
     print_time(initilization_start,initilization_end,entire_run_time);
     std::cout << "| Algorithm:     ";
     print_time(algorithm_start,algorithm_end,entire_run_time);
